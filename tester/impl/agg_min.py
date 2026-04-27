@@ -18,14 +18,20 @@ class MinAgg(Agg):
 
     def push(self, point: Row) -> None:
         v = self._expr.eval(point)
+        if v is None:
+            return
         while self._q and self._q[-1] >= v:
             self._q.pop()
         self._q.append(v)
 
     def pop(self, point: Row) -> None:
         v = self._expr.eval(point)
+        if v is None:
+            return
         if self._q and self._q[0] == v:
             self._q.popleft()
 
     def value(self) -> Any:
+        if not self._q:
+            return None
         return self._q[0]

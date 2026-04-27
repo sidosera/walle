@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import copy
 from collections.abc import Sequence
 
 from ..agg import _agg
-from ..operator import Operator
+from ..operator import Operator, pull
 from ..util import Row
 from .eval import Eval
 
@@ -15,59 +16,43 @@ class HashAggregate(Operator[Row]):
         super().__init__(child)
         self._key: tuple[Eval, ...] = tuple(key)
         self._fn: tuple[Eval, ...] = tuple(fn)
-        self._last_row: Row | None = None
-        self._done: bool = False
+        self._rows: list[Row] = []
+        self._index: int = 0
 
     def _group_key(self, row: Row) -> tuple:
         return tuple(ev.expr.eval(row) for ev in self._key)
 
-    def _emit_row(self) -> Row:
-        assert self._last_row is not None
-        out: Row = {}
-        for ev in self._key:
-            out[ev.out_key] = ev.expr.eval(self._last_row)
-        for ev in self._fn:
-            out[ev.out_key] = _agg(ev).value()
-        return out
-
     def open(self) -> None:
         super().open()
-        self._last_row = None
-        for ev in self._fn:
-            _agg(ev).reset()
-        self._done = False
+        groups: dict[tuple, tuple[Row, tuple[Eval, ...]]] = {}
+        for row in pull(self.child):
+            key = self._group_key(row)
+            if key not in groups:
+                group_row = {ev.out_key: ev.expr.eval(row) for ev in self._key}
+                group_aggs = tuple(copy.deepcopy(ev) for ev in self._fn)
+                for group_agg in group_aggs:
+                    _agg(group_agg).reset()
+                groups[key] = (group_row, group_aggs)
+            _, group_aggs = groups[key]
+            for group_agg in group_aggs:
+                _agg(group_agg).push(row)
+
+        self._rows = []
+        for group_row, group_aggs in groups.values():
+            out = dict(group_row)
+            for group_agg in group_aggs:
+                out[group_agg.out_key] = _agg(group_agg).value()
+            self._rows.append(out)
+        self._index = 0
 
     def next(self) -> Row | None:
-        if self._done:
+        if self._index >= len(self._rows):
             return None
-        while True:
-            row = self.child.next()
-            if row is None:
-                self._done = True
-                if self._last_row is None:
-                    return None
-                return self._emit_row()
-            if self._last_row is None or self._group_key(row) != self._group_key(
-                self._last_row
-            ):
-                result = (
-                    self._emit_row() if self._last_row is not None else None
-                )
-                for ev in self._fn:
-                    _agg(ev).reset()
-                self._last_row = row
-                for ev in self._fn:
-                    _agg(ev).push(row)
-                if result is not None:
-                    return result
-            else:
-                self._last_row = row
-                for ev in self._fn:
-                    _agg(ev).push(row)
+        row = self._rows[self._index]
+        self._index += 1
+        return row
 
     def close(self) -> None:
-        self._last_row = None
-        for ev in self._fn:
-            _agg(ev).reset()
-        self._done = False
+        self._rows.clear()
+        self._index = 0
         super().close()

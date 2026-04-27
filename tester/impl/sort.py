@@ -1,21 +1,50 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
+from functools import cmp_to_key
+
 from ..operator import Operator, pull
 from ..util import Row
 from .expr import Expr
 
 
+class SortKey:
+    def __init__(
+        self, expr: Expr, *, descending: bool = False, nulls_first: bool = False
+    ) -> None:
+        self.expr = expr
+        self.descending = descending
+        self.nulls_first = nulls_first
+
+
 class Sort(Operator[Row]):
-    def __init__(self, child: Operator[Row], key: Expr) -> None:
+    def __init__(self, child: Operator[Row], keys: Sequence[SortKey]) -> None:
         super().__init__(child)
-        self._key = key
+        self._keys = tuple(keys)
         self._rows: list[Row] = []
         self._index = 0
 
     def open(self) -> None:
         super().open()
-        self._rows = sorted(pull(self.child), key=lambda r: self._key.eval(r))
+        self._rows = sorted(pull(self.child), key=cmp_to_key(self._compare_rows))
         self._index = 0
+
+    def _compare_rows(self, left_row: Row, right_row: Row) -> int:
+        for key in self._keys:
+            left = key.expr.eval(left_row)
+            right = key.expr.eval(right_row)
+            if left is None or right is None:
+                if left is None and right is None:
+                    continue
+                if left is None:
+                    return -1 if key.nulls_first else 1
+                return 1 if key.nulls_first else -1
+            if left == right:
+                continue
+            if left < right:
+                return -1 if key.descending is False else 1
+            return 1 if key.descending is False else -1
+        return 0
 
     def next(self) -> Row | None:
         if self._index >= len(self._rows):

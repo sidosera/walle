@@ -7,8 +7,10 @@ from .impl.eval import Eval
 from .impl.expr import DateTime, Int, Minutes, Select, Timestamp
 from .impl.hash_aggregate import HashAggregate
 from .impl.scan import Scan
-from .impl.sort import Sort
+from .impl.sort import Sort, SortKey
 from .impl.tbucket import TBucket
 from .impl.tstep import TStep
 from .impl.window_aggregate import WindowAggregate
 from .run import run_to_stdout
+from .impl.filter import Filter
+from .impl.expr import Add, And, Lte, Gte, Eq, Literal

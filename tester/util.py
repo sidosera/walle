@@ -12,9 +12,7 @@ Row = dict[str, Any]
 
 def mktime(text: str) -> datetime:
     try:
-        return datetime.fromisoformat(text.replace("Z", "+00:00")).replace(
-            tzinfo=None
-        )
+        return datetime.fromisoformat(text.replace("Z", "+00:00")).replace(tzinfo=None)
     except ValueError as exc:
         raise ValueError(f"invalid timestamp [{text}]") from exc
 
@@ -45,4 +43,3 @@ def read_header(reader: csv.reader, path: Path) -> list[str]:
         return next(reader)
     except StopIteration as exc:
         raise ValueError(f"csv file is empty: {path}") from exc
-
