@@ -1,0 +1,73 @@
+from __future__ import annotations
+
+import csv
+from collections.abc import Iterable, Iterator, Sequence
+from pathlib import Path
+from typing import TextIO
+
+from ..operator import Operator
+from ..util import Row, read_header
+
+
+class CsvScan(Operator[Row]):
+    def __init__(self, path: Path) -> None:
+        super().__init__()
+        # CLI/shell often passes "~/..."; Path does not expand ~ unless asked.
+        self._path = path.expanduser()
+        self._handle: TextIO | None = None
+        self._reader: Iterator[list[str]] | None = None
+        self._columns: list[str] = []
+        self._line_number = 0
+
+    def open(self) -> None:
+        super().open()
+        self._handle = self._path.open(encoding="utf-8", newline="")
+        self._reader = csv.reader(self._handle)
+        raw_header = read_header(self._reader, self._path)
+        self._columns = [col.split(":")[0] for col in raw_header]
+        self._line_number = 1
+
+    def next(self) -> Row | None:
+        if self._reader is None:
+            return None
+        try:
+            row = next(self._reader)
+        except StopIteration:
+            return None
+        self._line_number += 1
+        if len(row) < len(self._columns):
+            raise ValueError(
+                f"csv row {self._line_number} has {len(row)} columns, expected {len(self._columns)}"
+            )
+        return dict(zip(self._columns, row))
+
+    def close(self) -> None:
+        if self._handle is not None:
+            self._handle.close()
+        self._handle = None
+        self._reader = None
+        self._columns = []
+        super().close()
+
+
+class ListScan(Operator[Row]):
+    def __init__(self, rows: Sequence[Row] | Iterable[Row]) -> None:
+        super().__init__()
+        self._rows: Sequence[Row] | Iterable[Row] = rows
+        self._it: Iterator[Row] | None = None
+
+    def open(self) -> None:
+        super().open()
+        self._it = iter(self._rows)
+
+    def next(self) -> Row | None:
+        if self._it is None:
+            return None
+        row = next(self._it, None)
+        if row is None:
+            return None
+        return dict(row)
+
+    def close(self) -> None:
+        self._it = None
+        super().close()

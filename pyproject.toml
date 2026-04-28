@@ -1,0 +1,26 @@
+[project]
+name = "walle"
+version = "0.1.0"
+description = "Small query-plan runner and operators for local ES|QL experiments"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+walle-tester = "tester:main"
+
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["rt*"]
+
+[tool.setuptools]
+py-modules = ["tester"]
+
+[tool.pyright]
+# Entire project on import path so `import tester` resolves; same as repo-root extraPaths in monorepos.
+include = ["."]
+executionEnvironments = [{ root = ".", extraPaths = ["."] }]

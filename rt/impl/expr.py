@@ -5,7 +5,7 @@ import operator
 from datetime import datetime, timedelta
 from typing import Any
 
-from ..util import Row, mktime
+from ..util import Row, bucket_ceil, duration_micros, mktime
 
 
 class Expr(abc.ABC):
@@ -160,3 +160,27 @@ class Minutes(timedelta):
 
 def Timestamp(text: str) -> datetime:
     return mktime(text)
+
+
+class TBucket(Expr):
+    def __init__(self, size: timedelta, child: Expr) -> None:
+        self._size = size
+        self._child = child
+
+    def eval(self, row: Row) -> Any:
+        return bucket_ceil(self._child.eval(row), self._size)
+
+
+class TStep(Expr):
+    def __init__(self, size: timedelta, start: datetime, child: Expr) -> None:
+        self._size = size
+        self._start = start
+        self._child = child
+
+    def eval(self, row: Row) -> Any:
+        t = self._child.eval(row)
+        elapsed = duration_micros(t - self._start)
+        step_size = duration_micros(self._size)
+        quotient, remainder = divmod(elapsed, step_size)
+        n = max(1, quotient) if remainder == 0 else quotient + 1
+        return self._start + timedelta(microseconds=n * step_size)
