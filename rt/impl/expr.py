@@ -182,5 +182,5 @@ class TStep(Expr):
         elapsed = duration_micros(t - self._start)
         step_size = duration_micros(self._size)
         quotient, remainder = divmod(elapsed, step_size)
-        n = max(1, quotient) if remainder == 0 else quotient + 1
+        n = quotient if remainder == 0 else quotient + 1
         return self._start + timedelta(microseconds=n * step_size)
