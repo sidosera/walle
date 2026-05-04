@@ -5,12 +5,8 @@ import operator
 from datetime import datetime, timedelta
 from typing import Any
 
-from ..util import Row, bucket_ceil, duration_micros, mktime
-
-
-class Expr(abc.ABC):
-    @abc.abstractmethod
-    def eval(self, row: Row) -> Any: ...
+from ..expr import Expr
+from ..util import Row, bucket_ceil, bucket_floor, duration_micros, mktime
 
 
 class Literal(Expr):
@@ -163,12 +159,15 @@ def Timestamp(text: str) -> datetime:
 
 
 class TBucket(Expr):
+    """Left-edge labeled bucket (matches ESQL's BUCKET / TBUCKET):
+    returns the largest boundary <= value."""
+
     def __init__(self, size: timedelta, child: Expr) -> None:
         self._size = size
         self._child = child
 
     def eval(self, row: Row) -> Any:
-        return bucket_ceil(self._child.eval(row), self._size)
+        return bucket_floor(self._child.eval(row), self._size)
 
 
 class TStep(Expr):

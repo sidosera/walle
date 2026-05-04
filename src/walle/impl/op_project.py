@@ -4,7 +4,7 @@ from collections.abc import Sequence
 
 from ..operator import Operator
 from ..util import Row
-from .eval import Eval
+from .op_eval import Eval
 
 
 class Project(Operator[Row]):

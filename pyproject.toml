@@ -1,7 +1,7 @@
 [project]
 name = "walle"
 version = "0.1.0"
-description = "Tiny query-plan runner for local ES|QL experiments"
+description = "Tiny arbitrary query-plan runner for local experiments"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = []
@@ -15,12 +15,13 @@ requires = ["setuptools>=61", "wheel", "ruff"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-where = ["."]
-include = ["rt*"]
+where = ["src"]
+include = ["walle*"]
 
 [tool.setuptools]
+package-dir = { "" = "src" }
 py-modules = ["tester", "walle_test"]
 
 [tool.pyright]
-include = ["."]
-executionEnvironments = [{ root = ".", extraPaths = ["."] }]
+include = ["src", "tests"]
+extraPaths = ["src"]

@@ -12,17 +12,16 @@ from ..util import Row, read_header
 class CsvScan(Operator[Row]):
     def __init__(self, path: Path) -> None:
         super().__init__()
-        # CLI/shell often passes "~/..."; Path does not expand ~ unless asked.
         self._path = path.expanduser()
-        self._handle: TextIO | None = None
+        self._fd: TextIO | None = None
         self._reader: Iterator[list[str]] | None = None
         self._columns: list[str] = []
         self._line_number = 0
 
     def open(self) -> None:
         super().open()
-        self._handle = self._path.open(encoding="utf-8", newline="")
-        self._reader = csv.reader(self._handle)
+        self._fd = self._path.open(encoding="utf-8", newline="")
+        self._reader = csv.reader(self._fd)
         raw_header = read_header(self._reader, self._path)
         self._columns = [col.split(":")[0] for col in raw_header]
         self._line_number = 1
@@ -35,16 +34,18 @@ class CsvScan(Operator[Row]):
         except StopIteration:
             return None
         self._line_number += 1
+
         if len(row) < len(self._columns):
             raise ValueError(
-                f"csv row {self._line_number} has {len(row)} columns, expected {len(self._columns)}"
+                f"line:{self._line_number} missing column, expected {len(self._columns)}, got {len(row)}"
             )
+
         return dict(zip(self._columns, row))
 
     def close(self) -> None:
-        if self._handle is not None:
-            self._handle.close()
-        self._handle = None
+        if self._fd is not None:
+            self._fd.close()
+        self._fd = None
         self._reader = None
         self._columns = []
         super().close()

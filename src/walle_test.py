@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 
 
 def main() -> None:
+    project_root = Path(__file__).resolve().parent.parent
     suite = unittest.defaultTestLoader.discover(
-        start_dir="tests",
+        start_dir=str(project_root / "tests"),
         pattern="test_*.py",
-        top_level_dir=".",
+        top_level_dir=str(project_root),
     )
     runner = unittest.TextTestRunner(verbosity=2)
     result = runner.run(suite)

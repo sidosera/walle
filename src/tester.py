@@ -13,54 +13,13 @@ from datetime import date, datetime, time
 from pathlib import Path
 from types import ModuleType
 from typing import Any
-from urllib.parse import ParseResult, unquote, urlparse
-from urllib.request import url2pathname
 
 _ROOT = Path(__file__).resolve().parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
-
-from rt.impl.agg_count import CountAgg
-from rt.impl.agg_last import LastAgg
-from rt.impl.agg_max import MaxAgg
-from rt.impl.agg_min import MinAgg
-from rt.impl.agg_increase import IncreaseAgg
-from rt.impl.agg_rate import RateAgg
-from rt.impl.agg_sum import SumAgg
-from rt.impl.eval import Eval
-from rt.impl.expr import (
-    Add,
-    And,
-    DateTime,
-    Eq,
-    Gt,
-    Gte,
-    Int,
-    Literal,
-    Lte,
-    Minutes,
-    Select,
-    TBucket,
-    TStep,
-    Timestamp,
-)
-from rt.impl.filter import Filter
-from rt.impl.hash_aggregate import HashAggregate
-from rt.impl.project import Project
-from rt.impl.scan import CsvScan, ListScan
-from rt.impl.sort import Sort, SortKey
-from rt.impl.window_aggregate import WindowAggregate
-from rt.operator import Operator, run
-from rt.util import Row, format_timestamp
-
-
-class TestCase:
-    __slots__ = ("plan",)
-
-    def __init__(self, plan: Operator) -> None:
-        if not isinstance(plan, Operator):
-            raise TypeError("TestCase plan must be an rt.operator.Operator")
-        self.plan = plan
+_PARENT = _ROOT.parent
+if str(_PARENT) not in sys.path:
+    sys.path.insert(0, str(_PARENT))
 
 
 def _value_for_csv(value: Any) -> Any:
@@ -83,15 +42,14 @@ def run_to_stdout(plan: Operator[Row]) -> None:
     sys.stdout.flush()
 
 
-_SKIP_FUNCTION_NAMES = frozenset({"main"})
+_IGNORED_FIXTURE = frozenset({"main"})
 
 
-def _functions_defined_in_module(module: ModuleType) -> list[tuple[str, Any]]:
-    """Top-level functions defined in this testcase module (sorted by name)."""
+def _fixtures(module: ModuleType) -> list[tuple[str, Any]]:
     mod_name = module.__name__
     out: list[tuple[str, Any]] = []
     for key in sorted(module.__dict__):
-        if key.startswith("_") or key in _SKIP_FUNCTION_NAMES:
+        if key.startswith("_") or key in _IGNORED_FIXTURE:
             continue
         obj = module.__dict__[key]
         if not inspect.isfunction(obj):
@@ -103,17 +61,15 @@ def _functions_defined_in_module(module: ModuleType) -> list[tuple[str, Any]]:
 
 
 def _plan_from_declared(declared: Any, fn_name: str) -> Operator:
-    if isinstance(declared, TestCase):
-        return declared.plan
     if isinstance(declared, Operator):
         return declared
+
     raise SystemExit(
-        f"{fn_name}() must return TestCase or Operator, got {type(declared).__name__!r}"
+        f"{fn_name}() must return Operator, got {type(declared).__name__!r}"
     )
 
 
 def _parse_case_kw(tokens: list[str]) -> dict[str, str]:
-    """Parse `key=value` tokens into string kwargs (values may be empty)."""
     out: dict[str, str] = {}
     for tok in tokens:
         if "=" not in tok:
@@ -128,8 +84,7 @@ def _parse_case_kw(tokens: list[str]) -> dict[str, str]:
     return out
 
 
-def _invoke_testcase(fn: Any, kw: dict[str, str], name: str) -> Any:
-    """Call testcase with CLI kwargs (strings); supports normal params or a single **kwargs."""
+def _invoke_operator(fn: Any, kw: dict[str, str], name: str) -> Any:
     sig = inspect.signature(fn)
     params = tuple(sig.parameters.values())
     if len(params) == 1 and params[0].kind == inspect.Parameter.VAR_KEYWORD:
@@ -163,35 +118,13 @@ def _resolve_local_path(ref: str) -> Path:
     return p.resolve()
 
 
-def _path_from_file_url(parsed: ParseResult) -> Path:
-    path = unquote(parsed.path)
-    if (
-        sys.platform == "win32"
-        and path.startswith("/")
-        and len(path) > 2
-        and path[2] == ":"
-    ):
-        path = path[1:]
-    return Path(url2pathname(path))
-
-
 def resolve_source_path(ref: str) -> tuple[Path, str]:
     ref = ref.strip()
     if not ref:
         raise SystemExit("empty testcase reference")
-    parsed = urlparse(ref)
-    if parsed.scheme == "file":
-        path = _path_from_file_url(parsed)
-        if not path.is_file():
-            raise SystemExit(f"testcase file does not exist: {path}")
-        rp = path.resolve()
-        return rp, str(rp)
-    if parsed.scheme == "":
-        path = _resolve_local_path(ref)
-        return path, str(Path(ref).expanduser().resolve())
-    raise SystemExit(
-        f"unsupported testcase reference (use a path or file:// URL): {parsed.scheme!r}"
-    )
+
+    path = _resolve_local_path(ref)
+    return path, str(Path(ref).expanduser().resolve())
 
 
 def load_testcase_module(path: Path, key: str) -> ModuleType:
@@ -213,12 +146,8 @@ def load_testcase_module(path: Path, key: str) -> ModuleType:
 
 
 def main(argv: list[str] | None = None) -> None:
-    ap = argparse.ArgumentParser(
-        description="Run every top-level testcase function in a module; print one JSON object per output row."
-    )
-    ap.add_argument(
-        "testcase", help="Path to a testcase .py file, or file:///path/to/case.py"
-    )
+    ap = argparse.ArgumentParser(description="walle")
+    ap.add_argument("testcase", help="Path to a testcase file")
     ap.add_argument(
         "case_kw",
         nargs="*",
@@ -233,16 +162,15 @@ def main(argv: list[str] | None = None) -> None:
 
     kw = _parse_case_kw(list(ns.case_kw))
 
-    pairs = _functions_defined_in_module(testcase)
+    pairs = _fixtures(testcase)
     if not pairs:
         raise SystemExit(
-            "testcase module must define at least one top-level function that returns "
-            "TestCase or Operator (names starting with '_' are ignored)"
+            "testcase module must define at least one top-level function that returns Operator"
         )
 
     for name, fn in pairs:
         try:
-            declared = _invoke_testcase(fn, kw, name)
+            declared = _invoke_operator(fn, kw, name)
         except SystemExit:
             raise
         except Exception as exc:

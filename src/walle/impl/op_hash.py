@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from ..agg import _agg
 from ..operator import Operator, pull
 from ..util import Row
-from .eval import Eval
+from .op_eval import Eval
 
 
 class HashAggregate(Operator[Row]):

@@ -8,7 +8,7 @@ from typing import cast
 from ..agg import _agg
 from ..operator import Operator
 from ..util import Row
-from .eval import Eval
+from .op_eval import Eval
 from .expr import Expr
 
 

@@ -38,6 +38,13 @@ def bucket_ceil(value: datetime, step: timedelta) -> datetime:
     return EPOCH + timedelta(microseconds=(quotient + 1) * step_size)
 
 
+def bucket_floor(value: datetime, step: timedelta) -> datetime:
+    elapsed = duration_micros(value - EPOCH)
+    step_size = duration_micros(step)
+    quotient, _ = divmod(elapsed, step_size)
+    return EPOCH + timedelta(microseconds=quotient * step_size)
+
+
 def read_header(reader: csv.reader, path: Path) -> list[str]:
     try:
         return next(reader)

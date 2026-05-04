@@ -1,3 +1,1 @@
-# Walle
-
-Small query-plan runner for local ES|QL experiments.
+Tiny arbitrary query-plan runner for local experiments.

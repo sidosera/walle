@@ -7,7 +7,7 @@ from .impl.expr import Expr
 from .util import Row
 
 if TYPE_CHECKING:
-    from .impl.eval import Eval
+    from .impl.op_eval import Eval
 
 
 class Agg(Expr, abc.ABC):
