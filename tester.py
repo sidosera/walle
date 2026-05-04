@@ -24,6 +24,8 @@ from rt.impl.agg_count import CountAgg
 from rt.impl.agg_last import LastAgg
 from rt.impl.agg_max import MaxAgg
 from rt.impl.agg_min import MinAgg
+from rt.impl.agg_increase import IncreaseAgg
+from rt.impl.agg_rate import RateAgg
 from rt.impl.agg_sum import SumAgg
 from rt.impl.eval import Eval
 from rt.impl.expr import (
