@@ -20,16 +20,22 @@ class SortKey:
 class Sort(Operator[Row]):
     def __init__(self, child: Operator[Row], keys: Sequence[SortKey]) -> None:
         super().__init__(child)
+        if not keys:
+            raise ValueError("Sort requires at least one sort key")
         self._keys = tuple(keys)
         self._rows: list[Row] = []
         self._index = 0
 
     def open(self) -> None:
         super().open()
+        if self.child is None:
+            raise RuntimeError("Sort requires a child operator")
         self._rows = sorted(pull(self.child), key=cmp_to_key(self._compare_rows))
         self._index = 0
 
     def _compare_rows(self, left_row: Row, right_row: Row) -> int:
+        if not isinstance(left_row, dict) or not isinstance(right_row, dict):
+            raise TypeError("Sort rows must be dict objects")
         for key in self._keys:
             left = key.expr.eval(left_row)
             right = key.expr.eval(right_row)

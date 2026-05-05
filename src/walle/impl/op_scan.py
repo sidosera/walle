@@ -13,6 +13,8 @@ class CsvScan(Operator[Row]):
     def __init__(self, path: Path) -> None:
         super().__init__()
         self._path = path.expanduser()
+        if not self._path.exists():
+            raise FileNotFoundError(self._path)
         self._fd: TextIO | None = None
         self._reader: Iterator[list[str]] | None = None
         self._columns: list[str] = []
@@ -28,7 +30,7 @@ class CsvScan(Operator[Row]):
 
     def next(self) -> Row | None:
         if self._reader is None:
-            return None
+            raise RuntimeError("CsvScan.next() called before open()")
         try:
             row = next(self._reader)
         except StopIteration:
@@ -63,10 +65,12 @@ class ListScan(Operator[Row]):
 
     def next(self) -> Row | None:
         if self._it is None:
-            return None
+            raise RuntimeError("ListScan.next() called before open()")
         row = next(self._it, None)
         if row is None:
             return None
+        if not isinstance(row, dict):
+            raise TypeError(f"ListScan expected row dict, got {type(row).__name__}")
         return dict(row)
 
     def close(self) -> None:

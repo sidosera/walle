@@ -11,9 +11,18 @@ class Filter(Operator[Row]):
         self._predicate = predicate
 
     def next(self) -> Row | None:
+        if self.child is None:
+            raise RuntimeError("Filter requires a child operator")
         while True:
             row = self.child.next()
             if row is None:
                 return None
-            if self._predicate.eval(row) is True:
+            if not isinstance(row, dict):
+                raise TypeError(f"Filter expected row dict, got {type(row).__name__}")
+            value = self._predicate.eval(row)
+            if value is True:
                 return row
+            if value is not False and value is not None:
+                raise TypeError(
+                    f"Filter predicate must evaluate to bool|None, got {type(value).__name__}"
+                )

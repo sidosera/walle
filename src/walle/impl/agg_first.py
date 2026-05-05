@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..agg import Agg
+from ..agg import AggregateExpr
 from ..util import Row
 from .expr import Expr
 
 
-class FirstAgg(Agg):
+class FirstExpr(AggregateExpr):
     def __init__(self, child: Expr) -> None:
         self._expr = child
         self._val: Any = None
@@ -27,7 +27,9 @@ class FirstAgg(Agg):
         self._set = True
 
     def pop(self, point: Row) -> None:
-        pass
+        raise NotImplementedError(
+            "FirstExpr.pop() is not supported for sliding-window use"
+        )
 
     def value(self) -> Any:
         return self._val

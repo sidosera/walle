@@ -6,16 +6,18 @@ from collections.abc import Sequence
 from ..agg import _agg
 from ..operator import Operator, pull
 from ..util import Row
-from .op_eval import Eval
+from .op_eval import Map
 
 
-class HashAggregate(Operator[Row]):
+class GroupAggregate(Operator[Row]):
     def __init__(
-        self, child: Operator[Row], key: Sequence[Eval], fn: Sequence[Eval]
+        self, child: Operator[Row], key: Sequence[Map], fn: Sequence[Map]
     ) -> None:
         super().__init__(child)
-        self._key: tuple[Eval, ...] = tuple(key)
-        self._fn: tuple[Eval, ...] = tuple(fn)
+        self._key: tuple[Map, ...] = tuple(key)
+        self._fn: tuple[Map, ...] = tuple(fn)
+        if not self._fn:
+            raise ValueError("GroupAggregate requires at least one aggregate function")
         self._rows: list[Row] = []
         self._index: int = 0
 
@@ -24,8 +26,14 @@ class HashAggregate(Operator[Row]):
 
     def open(self) -> None:
         super().open()
-        groups: dict[tuple, tuple[Row, tuple[Eval, ...]]] = {}
+        if self.child is None:
+            raise RuntimeError("GroupAggregate requires a child operator")
+        groups: dict[tuple, tuple[Row, tuple[Map, ...]]] = {}
         for row in pull(self.child):
+            if not isinstance(row, dict):
+                raise TypeError(
+                    f"GroupAggregate expected row dict, got {type(row).__name__}"
+                )
             key = self._group_key(row)
             if key not in groups:
                 group_row = {ev.out_key: ev.expr.eval(row) for ev in self._key}

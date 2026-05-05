@@ -19,23 +19,44 @@ class Literal(Expr):
 
 class Select(Expr):
     def __init__(self, *fields: str) -> None:
+        if not fields:
+            raise ValueError("Select requires at least one field")
+        if any(field == "" for field in fields):
+            raise ValueError("Select field names must be non-empty")
         self._fields = fields
 
     def eval(self, row: Row) -> Any:
         if len(self._fields) == 1:
-            return row[self._fields[0]]
-        return tuple(row[f] for f in self._fields)
+            field = self._fields[0]
+            if field not in row:
+                raise KeyError(f"missing field: {field}")
+            return row[field]
+        out: list[Any] = []
+        for field in self._fields:
+            if field not in row:
+                raise KeyError(f"missing field: {field}")
+            out.append(row[field])
+        return tuple(out)
 
 
-class DateTime(Expr):
-    def __init__(self, child: Expr) -> None:
+class ToTimestamp(Expr):
+    def __init__(self, child: Expr | str) -> None:
         self._child = child
 
     def eval(self, row: Row) -> Any:
-        return mktime(self._child.eval(row))
+        value = self._child if isinstance(self._child, str) else self._child.eval(row)
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            return mktime(value)
+        raise TypeError(
+            f"ToTimestamp expects str|datetime|None, got {type(value).__name__}"
+        )
 
 
-class Int(Expr):
+class ToInt(Expr):
     def __init__(self, child: Expr) -> None:
         self._child = child
 
@@ -43,6 +64,8 @@ class Int(Expr):
         value = self._child.eval(row)
         if value is None:
             return None
+        if isinstance(value, bool):
+            raise TypeError("ToInt expects numeric or numeric-string input, got bool")
         return int(value)
 
 
@@ -154,32 +177,52 @@ class Minutes(timedelta):
         return super().__new__(cls, minutes=n)
 
 
-def Timestamp(text: str) -> datetime:
-    return mktime(text)
-
-
-class TBucket(Expr):
+class BucketFloor(Expr):
     """Left-edge labeled bucket (matches ESQL's BUCKET / TBUCKET):
     returns the largest boundary <= value."""
 
     def __init__(self, size: timedelta, child: Expr) -> None:
+        if size <= timedelta(0):
+            raise ValueError(f"bucket size must be > 0, got {size}")
         self._size = size
         self._child = child
 
     def eval(self, row: Row) -> Any:
-        return bucket_floor(self._child.eval(row), self._size)
+        value = self._child.eval(row)
+        if value is None:
+            return None
+        if not isinstance(value, datetime):
+            raise TypeError(
+                f"BucketFloor expects datetime input, got {type(value).__name__}"
+            )
+        return bucket_floor(value, self._size)
 
 
-class TStep(Expr):
-    def __init__(self, size: timedelta, start: datetime, child: Expr) -> None:
+class StepCeil(Expr):
+    def __init__(self, size: timedelta, start: Expr | datetime, child: Expr) -> None:
+        if size <= timedelta(0):
+            raise ValueError(f"step size must be > 0, got {size}")
         self._size = size
         self._start = start
         self._child = child
 
     def eval(self, row: Row) -> Any:
+        start = (
+            self._start if isinstance(self._start, datetime) else self._start.eval(row)
+        )
         t = self._child.eval(row)
-        elapsed = duration_micros(t - self._start)
+        if start is None or t is None:
+            return None
+        if not isinstance(start, datetime):
+            raise TypeError(
+                f"StepCeil start must evaluate to datetime, got {type(start).__name__}"
+            )
+        if not isinstance(t, datetime):
+            raise TypeError(
+                f"StepCeil child must evaluate to datetime, got {type(t).__name__}"
+            )
+        elapsed = duration_micros(t - start)
         step_size = duration_micros(self._size)
         quotient, remainder = divmod(elapsed, step_size)
         n = quotient if remainder == 0 else quotient + 1
-        return self._start + timedelta(microseconds=n * step_size)
+        return start + timedelta(microseconds=n * step_size)

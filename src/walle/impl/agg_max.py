@@ -3,12 +3,12 @@ from __future__ import annotations
 from collections import deque
 from typing import Any
 
-from ..agg import Agg
+from ..agg import AggregateExpr
 from ..util import Row
 from .expr import Expr
 
 
-class MaxAgg(Agg):
+class MaxExpr(AggregateExpr):
     def __init__(self, expr: Expr) -> None:
         self._expr = expr
         self._q: deque[Any] = deque()
@@ -28,6 +28,8 @@ class MaxAgg(Agg):
         v = self._expr.eval(point)
         if v is None:
             return
+        if not self._q:
+            raise RuntimeError("MaxExpr.pop() called on empty state")
         if self._q and self._q[0] == v:
             self._q.popleft()
 
