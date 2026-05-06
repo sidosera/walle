@@ -2,26 +2,18 @@ Tiny query-plan runner used as a deterministic reference engine for testing.
 
 ## Core
 
-### Operator
+### `Operator`
 
 Row-stream stage with `open`/`next`/`close`
 
-### Expr
+### `Expr`
 
-Row-local computation.
+Stateless row-local computation.
 
-
-### AggregateExpr
+### `AggregateExpr`
 
 Stateful expr with `reset`/`push`/`pop`/`value`.
 
-### WindowedAggregate
-
-Sliding-time driver for aggregate state.
-
-### GroupAggregate
-
-Hash grouping over materialized child rows.
 
 ## Plan Concepts
 
